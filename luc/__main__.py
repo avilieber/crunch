@@ -18,17 +18,14 @@ def clean_string_col(col):
     return out
 
 
-def main(datedir, song_sheet_name, return_df=False):
+def main(date_dir, song_sheet_name, return_df=False):
     # compat
-    DATEDIR = datedir
-    SONG_SHEET_NAME = song_sheet_name
-
+    date_dir = Path(date_dir).absolute()
     pat = re.compile(
         r"^(?P<artist>.*) (?P<kpi>recordings\-\d{1,2}day|PW|YTD)(?: \(\d+\))?\.csv$"
     )
     stat_sheets = []
-    date_folder = DATEDIR
-    for service_dir in date_folder.iterdir():
+    for service_dir in date_dir.iterdir():
         if not service_dir.is_dir():
             continue
         for stat_sheet in service_dir.iterdir():
@@ -36,6 +33,8 @@ def main(datedir, song_sheet_name, return_df=False):
                 continue
             # get KPI and artist from file
             match = re.match(pat, stat_sheet.name)
+            if not match:
+                continue
             stats_df = pd.read_csv(stat_sheet)
             stats_df.columns = stats_df.columns.str.lower()
             stats_df = (
@@ -54,36 +53,39 @@ def main(datedir, song_sheet_name, return_df=False):
     kpis = kpis.reset_index().apply(clean_string_col).set_index(kpis.index.names)
     clean.index = pd.util.hash_pandas_object(kpis.index)
 
-    song_sheet = pd.read_csv(DATEDIR / SONG_SHEET_NAME)
+    song_sheet = pd.read_csv(date_dir / song_sheet_name)
     song_sheet.columns = song_sheet.columns.str.strip().str.lower()
     song_sheet = song_sheet.dropna(how="all")
     song_sheet["artist"] = song_sheet["artist"].pad()
     song_sheet["song"] = song_sheet["include"].combine_first(song_sheet["exclude"])
     song_sheet = song_sheet.set_index(["artist", "song"])
     song_sheet["action"] = song_sheet[["include", "exclude"]].notna().idxmax(axis=1)
-    song_sheet = song_sheet.reset_index().melt(
+    song_sheet = song_sheet.reset_index()
+    song_sheet = song_sheet.melt(
         id_vars=("artist", "song", "action"),
         value_vars=("spotify", "apple"),
         var_name="service",
         value_name="keep",
     )
-    song_sheet = song_sheet.loc[song_sheet["keep"].notna()].drop(columns="keep")
+    song_sheet = song_sheet.loc[song_sheet["keep"].notna()]
+    song_sheet = song_sheet.drop(columns="keep")
     song_sheet = song_sheet.apply(clean_string_col)
     song_sheet = song_sheet.set_index(["artist", "song", "service"])
 
-    artists_w_exclusions = (
+    art_w_exc = (
         song_sheet.loc[song_sheet["action"] == "exclude"]
         .index.get_level_values("artist")
         .drop_duplicates()
     )
-    artists_w_inclusions = (
+    # artists with inclusios
+    art_w_inc = (
         song_sheet.loc[song_sheet["action"] == "include"]
         .index.get_level_values("artist")
         .drop_duplicates()
     )
-    artists_to_edit = set(artists_w_inclusions) | set(artists_w_exclusions)
-    all_artists = kpis.index.levels[0]
-    artists_to_keep = all_artists.difference(artists_to_edit)
+    art_to_edit = set(art_w_inc) | set(art_w_exc)
+    all_art = kpis.index.levels[0]
+    art_to_keep = all_art.difference(art_to_edit)
 
     check = song_sheet.join(kpis)
     check = check.loc[check["streams"].isna()]
@@ -95,22 +97,23 @@ def main(datedir, song_sheet_name, return_df=False):
             )
 
     out = kpis.join(song_sheet)
-    out.loc[artists_to_keep, "action"] = "include"
-    out.loc[artists_w_inclusions, "action"] = out.loc[
-        artists_w_inclusions, "action"
-    ].fillna("exclude")
-    out.loc[artists_w_exclusions, "action"] = out.loc[
-        artists_w_exclusions, "action"
-    ].fillna("include")
+    out.loc[art_to_keep, "action"] = "include"
+    out.loc[art_w_inc, "action"] = out.loc[art_w_inc, "action"].fillna("exclude")
+    out.loc[art_w_exc, "action"] = out.loc[art_w_exc, "action"].fillna("include")
     out = out.loc[out["action"] != "exclude"].drop(columns="action")
     out.index = pd.util.hash_pandas_object(out.index)
     out = out.join(clean).reset_index(drop=True).set_index(idx_names)
-    out.to_csv(DATEDIR / "Audit {}.csv".format(DATEDIR))
-    out = out.groupby(["artist", "kpi"]).sum().unstack("kpi").droplevel(0, axis=1)
-    out = out.rename(columns={"pw": "PW", "ytd": "YTD"})[
-        ["PW", "YTD", "recordings-28day", "recordings-7day"]
-    ]
-    out.to_csv(DATEDIR / f"Output {DATEDIR}.csv")
+    out.to_csv(date_dir / f"Audit {date_dir.name}.csv")
+    out = (
+        out.groupby(["artist", "kpi"])
+        .sum()
+        .unstack("kpi")
+        .droplevel(0, axis=1)
+        .rename(columns={"pw": "PW", "ytd": "YTD"})[
+            ["PW", "YTD", "recordings-28day", "recordings-7day"]
+        ]
+    )
+    out.to_csv(date_dir / f"Output {date_dir.name}.csv")
     if return_df:
         return out
 
@@ -124,14 +127,5 @@ if __name__ == "__main__":
     parser.add_argument(
         "date_directory", metavar="D", type=str, help="Name of Date Folder"
     )
-    parser.add_argument(
-        "-s",
-        dest="song_sheet_name",
-        type=str,
-        default=None,
-        help="Enter name of song sheet if not Song Sheet.csv",
-    )
     args = parser.parse_args()
-    datedir = Path(args.date_directory)
-    song_sheet_name = args.song_sheet_name or SONG_SHEET_NAME
-    exit(main(datedir=datedir, song_sheet_name=song_sheet_name))
+    exit(main(datedir=args.date_directory, song_sheet_name=SONG_SHEET_NAME))
