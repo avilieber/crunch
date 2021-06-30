@@ -1,0 +1,10 @@
+# dev
+jupyterlab
+black
+isort
+pre-commit
+flake8
+pytest
+
+# pkg
+pandas
