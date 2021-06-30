@@ -1,12 +1,15 @@
 import argparse
-import os
 import re
 import warnings
 from pathlib import Path
 
 import pandas as pd
 
-SONGDIR = Path(os.getcwd())
+SONG_SHEET_NAME = "song_sheet.csv"
+OUTPUT_NAME = "output.csv"
+AUDIT_NAME = "audit.csv"
+
+__all__ = ["SONG_SHEET_NAME", "OUTPUT_NAME", "AUDIT_NAME", "main"]
 
 
 def clean_string_col(col):
@@ -19,8 +22,12 @@ def clean_string_col(col):
 
 
 def main(date_dir, song_sheet_name, return_df=False):
-    # compat
-    date_dir = Path(date_dir).absolute()
+
+    date_dir = Path(date_dir)
+
+    if not date_dir.is_absolute():
+        pass
+
     pat = re.compile(
         r"^(?P<artist>.*) (?P<kpi>recordings\-\d{1,2}day|PW|YTD)(?: \(\d+\))?\.csv$"
     )
@@ -103,7 +110,7 @@ def main(date_dir, song_sheet_name, return_df=False):
     out = out.loc[out["action"] != "exclude"].drop(columns="action")
     out.index = pd.util.hash_pandas_object(out.index)
     out = out.join(clean).reset_index(drop=True).set_index(idx_names)
-    out.to_csv(date_dir / f"Audit {date_dir.name}.csv")
+    out.to_csv(date_dir / f"{date_dir.name}_{AUDIT_NAME}")
     out = (
         out.groupby(["artist", "kpi"])
         .sum()
@@ -113,19 +120,16 @@ def main(date_dir, song_sheet_name, return_df=False):
             ["PW", "YTD", "recordings-28day", "recordings-7day"]
         ]
     )
-    out.to_csv(date_dir / f"Output {date_dir.name}.csv")
+    out.to_csv(date_dir / f"{date_dir.name}_{OUTPUT_NAME}")
     if return_df:
         return out
 
 
 if __name__ == "__main__":
 
-    # date = input("Please enter name of folder with song sheets")
-    SONG_SHEET_NAME = "Song Sheet.csv"
-
     parser = argparse.ArgumentParser(description="Generate KPI Sheet")
     parser.add_argument(
-        "date_directory", metavar="D", type=str, help="Name of Date Folder"
+        "date_directory", metavar="D", type=str, help="Name of Song Folder"
     )
     args = parser.parse_args()
-    exit(main(datedir=args.date_directory, song_sheet_name=SONG_SHEET_NAME))
+    exit(main(date_dir=args.date_directory, song_sheet_name=SONG_SHEET_NAME))
