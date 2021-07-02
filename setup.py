@@ -1,7 +1,7 @@
 from setuptools import setup
 
 NAME = "crunch"
-VERSION = "0.0.1"
+VERSION = "0.0.1.dev1"
 PACKAGES = ["crunch", "crunch.tests"]
 PACKAGE_DATA = {"crunch": ["tests/test_data/*", "tests/test_data/*/*"]}
 

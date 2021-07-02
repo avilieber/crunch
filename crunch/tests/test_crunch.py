@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from luc import OUTPUT_NAME, SONG_SHEET_NAME, main
+from crunch import OUTPUT_NAME, SONG_SHEET_NAME, main
 
 TEST_DIR = Path(__file__).parent / "test_data"  # absolute
 
