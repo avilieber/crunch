@@ -109,14 +109,20 @@ def main(date_dir, song_sheet_name, return_df=False):
     out = out.loc[out["action"] != "exclude"].drop(columns="action")
     out.index = pd.util.hash_pandas_object(out.index)
     out = out.join(clean).reset_index(drop=True).set_index(idx_names)
+    out = out.fillna(0).astype("int")
     out.to_csv(date_dir / f"{date_dir.name}_{AUDIT_NAME}")
     out = (
         out.groupby(["artist", "kpi"])
         .sum()
         .unstack("kpi")
         .droplevel(0, axis=1)
-        .rename(columns={"pw": "PW", "ytd": "YTD"})[
-            ["PW", "YTD", "recordings-28day", "recordings-7day"]
+        .rename(columns={"pw": "PW", "ytd": "YTD"})
+        .loc(axis=1)[
+            lambda df: [
+                col
+                for col in ["PW", "YTD", "recordings-28day", "recordings-7day"]
+                if col in df
+            ]
         ]
     )
     out.to_csv(date_dir / f"{date_dir.name}_{OUTPUT_NAME}")
