@@ -30,4 +30,5 @@ setup(
     package_data=PACKAGE_DATA,
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
+    build_exe_options = {'packages': ['_sysconfigdata_m_darwin_darwin']}
 )
